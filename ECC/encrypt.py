@@ -1,5 +1,5 @@
 import random
-from ecc_for_files.ecc import ECC
+from ecc import ECC
 
 
 ecc = ECC()
@@ -26,4 +26,4 @@ def encrypt_file(filename, G, Qa):
 
 ka = random.getrandbits(256)
 Qa = ecc.apply_double_and_add_method(G=ecc.G, k=ka, p=ecc.p)
-encrypt_file("plik.txt", ecc.G, Qa)
+
