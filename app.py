@@ -23,7 +23,7 @@ except psycopg2.Error as e:
 CREATE_TABLE = """CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
     name text NOT NULL, 
-    key BYTEA NOT NULL
+    key text NOT NULL
 );"""
 cur.execute(CREATE_TABLE)
 conn.commit()
@@ -47,10 +47,10 @@ def upload_to_bucket():
     encrypt = EncAndDecFile(file.filename).encrypt_file()
     key = encrypt[0]    
     encrypted_file = encrypt[1]
-    print(encrypted_file)
+    print(encrypted_file, key)
     cur.execute("INSERT INTO files (name, key) VALUES (%s, %s)", (encrypted_file, key))
     conn.commit()
-    blob_name = f"enc_{encrypted_file}"
+    blob_name = encrypted_file
     bucket_name = "inf-bucket"
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
     storage_client = storage.Client()
@@ -67,10 +67,10 @@ def download_from_bucket():
     file_name = body['filename']
 
 
-    source_blob_name = file_name
+    source_blob_name = f"enc_{file_name}"
     destination_file_name = source_blob_name
     bucket_name = "inf-bucket"
-  
+    print(source_blob_name)
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
 
     storage_client = storage.Client()
@@ -78,12 +78,16 @@ def download_from_bucket():
     blob = bucket.blob(source_blob_name)
     blob.download_to_filename(destination_file_name)
 
-    cur.execute("SELECT key FROM files WHERE name = %s", (source_blob_name,))
-    key = cur.fetchone()[0]
+    cur.execute("SELECT key FROM files WHERE name = %s", (file_name,))
+    key = cur.fetchone()
 
-    print(key)
+    if not key:
+        return jsonify({'error': 'No key found for file'})
+    
+    decoded_key = key.decode("utf-8")
 
-    decrypted_file = EncAndDecFile(source_blob_name).decrypt_file(key)
+
+    decrypted_file = EncAndDecFile(file_name).decrypt_file(decoded_key, source_blob_name)
 
     return decrypted_file.public_url
 
