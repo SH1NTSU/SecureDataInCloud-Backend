@@ -6,6 +6,7 @@ from flask import request
 from flask import jsonify
 from flask_cors import CORS
 import psycopg2 
+import base64
 
 app = Flask(__name__)
 CORS(app)
@@ -22,34 +23,35 @@ except psycopg2.Error as e:
 
 CREATE_TABLE = """CREATE TABLE IF NOT EXISTS files (
     id SERIAL PRIMARY KEY,
-    name text NOT NULL, 
-    key text NOT NULL
+    name TEXT NOT NULL, 
+    key TEXT NOT NULL
 );"""
 cur.execute(CREATE_TABLE)
 conn.commit()
 @app.route("/upload", methods=["POST"])
 def upload_to_bucket():
-    print(request)  
     file = request.files['file']
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'})
 
-
-
     if file.filename == '':
         return jsonify({'error': 'No selected file'})
-    upload_dir = r'C:\Users\marcl\Projects\SecureDataInCloud-Backend'
 
+    upload_dir = r'C:\Users\marcl\Projects\SecureDataInCloud-Backend'
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
     file.save(os.path.join(upload_dir, file.filename))
 
     encrypt = EncAndDecFile(file.filename).encrypt_file()
-    key = encrypt[0]    
+    key = encrypt[0]  # This is a bytes object
     encrypted_file = encrypt[1]
     print(encrypted_file, key)
-    cur.execute("INSERT INTO files (name, key) VALUES (%s, %s)", (encrypted_file, key))
+
+    # Encode the key to a base64 string
+    base64_key = base64.urlsafe_b64encode(key).decode('utf-8')
+    cur.execute("INSERT INTO files (name, key) VALUES (%s, %s)", (encrypted_file, base64_key))
     conn.commit()
+
     blob_name = encrypted_file
     bucket_name = "inf-bucket"
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
@@ -57,20 +59,17 @@ def upload_to_bucket():
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(blob_name)
     blob.upload_from_filename(os.path.join(upload_dir, blob_name))
+
     return jsonify({'message': 'File uploaded successfully'})
-
-
 
 @app.route("/download", methods=["POST"])
 def download_from_bucket():
     body = request.get_json()
     file_name = body['filename']
 
-
     source_blob_name = f"enc_{file_name}"
-    destination_file_name = source_blob_name
+    destination_file_name = os.path.join(r"C:\Users\marcl\Downloads", file_name)  # Change the directory as needed
     bucket_name = "inf-bucket"
-    print(source_blob_name)
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
 
     storage_client = storage.Client()
@@ -78,18 +77,22 @@ def download_from_bucket():
     blob = bucket.blob(source_blob_name)
     blob.download_to_filename(destination_file_name)
 
-    cur.execute("SELECT key FROM files WHERE name = %s", (file_name,))
-    key = cur.fetchone()
+    cur.execute("SELECT key FROM files WHERE name = %s", (source_blob_name,))
+    data = cur.fetchone()
+    if data is None:
+        return jsonify({'error': 'Key not found for file'}), 404
 
-    if not key:
-        return jsonify({'error': 'No key found for file'})
+    base64_key = data[0]
+
+    missing_padding = len(base64_key) % 4
+    if missing_padding != 0:
+        base64_key += '=' * (4 - missing_padding)
+
+    key = base64.urlsafe_b64decode(base64_key)
+
+    decrypted_content = EncAndDecFile(file_name).decrypt_file(key, destination_file_name)
     
-    decoded_key = key.decode("utf-8")
-
-
-    decrypted_file = EncAndDecFile(file_name).decrypt_file(decoded_key, source_blob_name)
-
-    return decrypted_file.public_url
+    return jsonify({'message': 'File decrypted successfully', 'decrypted_content': decrypted_content})
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 from cryptography.fernet import Fernet
+import os
 
 class EncAndDecFile:
     def __init__(self, filename):
@@ -31,16 +32,21 @@ class EncAndDecFile:
         
         return key, encrypted_filename
 
+
     def decrypt_file(self, key, encrypted_filename):
+
         f = Fernet(key)
-        print(encrypted_filename)
-        with open(encrypted_filename, 'rb') as encrypted_file:
+
+        with open(encrypted_filename, 'rb') as encrypted_file:  
             encrypted = encrypted_file.read()
 
         decrypted = f.decrypt(encrypted)
-        
-        decrypted_filename = f'dec_{self.filename}'
-        with open(decrypted_filename, 'wb') as decrypted_file:
+
+        decrypted_filename = f'dec_{os.path.basename(encrypted_filename)}'
+
+        with open(decrypted_filename, 'w') as decrypted_file:  
             decrypted_file.write(decrypted)
 
         return decrypted_filename
+
+
