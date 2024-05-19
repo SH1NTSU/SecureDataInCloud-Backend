@@ -1,52 +1,64 @@
-from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
+
 
 class EncAndDecFile:
     def __init__(self, filename):
         self.filename = filename
-        self.key = None
 
     def generate_key(self):
-        self.key = Fernet.generate_key()
+        key = os.urandom(32)
+        with open(f"key_{self.filename}.key", "wb") as key_file:
+            key_file.write(key)
+        return key
 
-        with open(f'key_{self.filename}.key', 'wb') as mykey:
-            mykey.write(self.key)
+    def pad_data(self, data):
+        block_size = 16
+        padded_length = block_size - (len(data) % block_size)
+        padder = padding.PKCS7(block_size * 8).padder()
+        padded_data = padder.update(data) + padder.finalize()
+        return padded_data
 
-        return self.key
+    def unpad_data(self, data):
+        block_size = 16
+        unpadder = padding.PKCS7(block_size * 8).unpadder()
+        unpadded_data = unpadder.update(data) + unpadder.finalize()
+        return unpadded_data
 
     def encrypt_file(self):
         key = self.generate_key()
+        iv = os.urandom(16)
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
 
-        f = Fernet(key)
+        with open(self.filename, "rb") as file:
+            original_data = file.read()
+        padded_data = self.pad_data(original_data)
+        encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
 
-        with open(f'{self.filename}', 'rb') as original_file:
-            original = original_file.read()
+        encrypted_filename = f"enc_{self.filename}"
+        with open(encrypted_filename, "wb") as file:
+            file.write(iv + encrypted_data)
 
-        encrypted = f.encrypt(original)
-
-        encrypted_filename = f'enc_{self.filename}'
-        with open(encrypted_filename, 'wb') as encrypted_file:
-            encrypted_file.write(encrypted)
-        print(key)
-
-        
         return key, encrypted_filename
 
-
     def decrypt_file(self, key, encrypted_filename):
+        with open(encrypted_filename, "rb") as file:
+            iv = file.read(16)
+            encrypted_data = file.read()
 
-        f = Fernet(key)
+        cipher = Cipher(
+            algorithms.AES(key[:32]), modes.CBC(iv), backend=default_backend()
+        )
+        decryptor = cipher.decryptor()
+        decrypted_padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
 
-        with open(encrypted_filename, 'rb') as encrypted_file:  
-            encrypted = encrypted_file.read()
+        decrypted_data = self.unpad_data(decrypted_padded_data)
 
-        decrypted = f.decrypt(encrypted)
-
-        decrypted_filename = f'dec_{os.path.basename(encrypted_filename)}'
-
-        with open(decrypted_filename, 'w') as decrypted_file:  
-            decrypted_file.write(decrypted)
+        decrypted_filename = f"dec_{os.path.basename(encrypted_filename)}"
+        with open(decrypted_filename, "wb") as file:
+            file.write(decrypted_data)
 
         return decrypted_filename
-
-

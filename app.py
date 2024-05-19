@@ -5,7 +5,7 @@ from flask import Flask
 from flask import request
 from flask import jsonify
 from flask_cors import CORS
-import psycopg2 
+import psycopg2
 import base64
 
 app = Flask(__name__)
@@ -28,71 +28,82 @@ CREATE_TABLE = """CREATE TABLE IF NOT EXISTS files (
 );"""
 cur.execute(CREATE_TABLE)
 conn.commit()
+
+
 @app.route("/upload", methods=["POST"])
 def upload_to_bucket():
-    file = request.files['file']
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'})
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'})
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
 
-    upload_dir = r'C:\Users\marcl\Projects\SecureDataInCloud-Backend'
+    upload_dir = r"C:\Users\marcl\Projects\SecureDataInCloud-Backend"
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
-    file.save(os.path.join(upload_dir, file.filename))
 
-    encrypt = EncAndDecFile(file.filename).encrypt_file()
-    key = encrypt[0]  # This is a bytes object
-    encrypted_file = encrypt[1]
-    print(encrypted_file, key)
+    file_path = os.path.join(upload_dir, file.filename)
+    file.save(file_path)
 
-    # Encode the key to a base64 string
-    base64_key = base64.urlsafe_b64encode(key).decode('utf-8')
-    cur.execute("INSERT INTO files (name, key) VALUES (%s, %s)", (encrypted_file, base64_key))
+    encrypt = EncAndDecFile(file.filename)
+    key, encrypted_file = encrypt.encrypt_file()
+    base64_key = base64.urlsafe_b64encode(key).decode("utf-8")
+
+    cur.execute(
+        "INSERT INTO files (name, key) VALUES (%s, %s)", (encrypted_file, base64_key)
+    )
     conn.commit()
 
     blob_name = encrypted_file
     bucket_name = "inf-bucket"
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
+        r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
+    )
     storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     blob.upload_from_filename(os.path.join(upload_dir, blob_name))
 
-    return jsonify({'message': 'File uploaded successfully'})
+    return jsonify({"message": "File uploaded successfully"})
+
 
 @app.route("/download", methods=["POST"])
 def download_from_bucket():
     body = request.get_json()
-    file_name = body['filename']
+    file_name = body["filename"]
 
     source_blob_name = f"enc_{file_name}"
-    destination_file_name = os.path.join(r"C:\Users\marcl\Downloads", file_name)  # Change the directory as needed
+    destination_file_name = os.path.join(r"C:\Users\marcl\Downloads", source_blob_name)
     bucket_name = "inf-bucket"
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
+        r"C:\Users\marcl\OneDrive\Documents\inf-bucket-29e11205031f.json"
+    )
 
     storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(source_blob_name)
     blob.download_to_filename(destination_file_name)
 
     cur.execute("SELECT key FROM files WHERE name = %s", (source_blob_name,))
     data = cur.fetchone()
     if data is None:
-        return jsonify({'error': 'Key not found for file'}), 404
+        return jsonify({"error": "Key not found for file"}), 404
 
     base64_key = data[0]
-
-    missing_padding = len(base64_key) % 4
-    if missing_padding != 0:
-        base64_key += '=' * (4 - missing_padding)
-
     key = base64.urlsafe_b64decode(base64_key)
 
-    decrypted_content = EncAndDecFile(file_name).decrypt_file(key, destination_file_name)
-    
-    return jsonify({'message': 'File decrypted successfully', 'decrypted_content': decrypted_content})
+    try:
+        decryptor = EncAndDecFile(file_name)
+        decrypted_file = decryptor.decrypt_file(key, destination_file_name)
+    except Exception as e:
+        print(f"Error decrypting file: {e}")
+        return jsonify({"error": "Decryption failed"}), 500
+
+    with open(decrypted_file, "rb") as file:
+        content = file.read()
+
+    return content
 
 
 if __name__ == "__main__":
