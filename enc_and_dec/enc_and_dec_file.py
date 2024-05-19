@@ -26,20 +26,26 @@ class EncAndDecFile:
 
         encrypted = f.encrypt(original)
 
+        with open(f'key_{self.filename}', 'rb') as key_file:
+            key = key_file.read()
+
         with open(f'enc_{self.filename}', 'wb') as encrypted_file:
             encrypted_file.write(encrypted)
+        print(key)
+        return key, f"{self.filename}"
+    
 
 
-    def decrypt_file(self):
-        with open(f'key_{self.filename}', 'rb') as mykey:
-            key = mykey.read()
-
+    def decrypt_file(self, key, file_name):
+        
         f = Fernet(key)
 
-        with open(f'enc_{self.filename}', 'rb') as encrypted_file:
+        with open(f'{file_name}', 'rb') as encrypted_file:
             encrypted = encrypted_file.read()
 
         decrypted = f.decrypt(encrypted)
 
         with open(f'dec_{self.filename}', 'wb') as decrypted_file:
             decrypted_file.write(decrypted)
+
+        return decrypted_file
