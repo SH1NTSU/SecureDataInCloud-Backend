@@ -1,8 +1,10 @@
-# SecureDataInCloud-Backend
+# SecureDataInCloud
 
-User wchodzi na strone jeśli chce wysłać i zaszyfrowac plik wybiera uploa. Później klika upload. Plik przesyła sie na server gdzie w serverze jest szyfrowant i zaszyfrowant plik wysyła sie do cloud storage a klucz i nazwa zaszyfrowanego pliku przesyła sie do bazy danych. Potem żeby pobrać ten plik user wpisuje który plik chce pobrac i klika download. nazwa pliku przesyła sie do servera gdzie server wyjmuje plik o tej nazwie z cloud storage i z bazy danych wyjmuje klucz który pasuje do tej nazwy pliku i z kluczem odszyfrwuje go i odzyfrowaną zawartość pliku przesyła na strone. Na stronie pobiera tą zawartość i tworz nowy plik z tą zawartośćą o podanej nazwie i go pobiera w downloads na komputerze usera.
+Funkcja ```upload file``` po wybraniu pliku przesyła go na server, gdzie jest szyfrowany wykorzystując AES i wysyłany na Google Cloud Storage. Aby zapisac klucz szyfrujący plik przesyłamy go do bazy danych (postgres) z zaszyfrowaną nazwą pliku. 
 
-server - flask
-szyfrowanie - AES
-frontend - react vite + axios
-database - postgres + pgAdmin4
+Aby pobrać plik z chmury wybieramy ```download file``` i wpisujemy nazwę pliku, na którym nam zależy. Przesyła sie ona na server, po czym plik jest wyjmowany z Google Cloud Storage i klucz z pasującą nazwa pliku jest wyjmowany z bazy danych. Następnie odszyfrowujemy plik wykorzystując AES i klucz z bazy. Odszyfrowany tekst jest zapisywany do pliku o tej samej nazwie co pierwotny i pobierany na komputer użytkownika w folderze pobrane.  
+
+- Server → Flask
+- Szyfrowanie → AES
+- Frontend → React + Axios
+- Database → Postgres 
