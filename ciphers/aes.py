@@ -1,6 +1,6 @@
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
 
 
@@ -10,13 +10,12 @@ class EncAndDecFile:
 
     def generate_key(self):
         key = os.urandom(32)
-        with open(f"key_{self.filename}.key", "wb") as key_file:
+        with open(f"key_{self.filename}", "wb") as key_file:
             key_file.write(key)
         return key
 
     def pad_data(self, data):
         block_size = 16
-        padded_length = block_size - (len(data) % block_size)
         padder = padding.PKCS7(block_size * 8).padder()
         padded_data = padder.update(data) + padder.finalize()
         return padded_data
@@ -49,9 +48,7 @@ class EncAndDecFile:
             iv = file.read(16)
             encrypted_data = file.read()
 
-        cipher = Cipher(
-            algorithms.AES(key[:32]), modes.CBC(iv), backend=default_backend()
-        )
+        cipher = Cipher(algorithms.AES(key[:32]), modes.CBC(iv), backend=default_backend())
         decryptor = cipher.decryptor()
         decrypted_padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
 

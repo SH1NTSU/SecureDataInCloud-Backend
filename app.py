@@ -1,12 +1,12 @@
-import os
+from ciphers.aes import EncAndDecFile
 from google.cloud import storage
-from ciphers.fernet import EncAndDecFile
-from flask import Flask
+from flask_cors import CORS
 from flask import request
 from flask import jsonify
-from flask_cors import CORS
+from flask import Flask
 import psycopg2
 import base64
+import os
 
 
 app = Flask(__name__)
@@ -14,22 +14,16 @@ CORS(app)
 
 
 try:
-    connection_string = "host=localhost port=5432 dbname=postgres user=postgres password=password connect_timeout=10 sslmode=prefer"
-    print(connection_string)
-    conn = psycopg2.connect(connection_string)
+    conn = psycopg2.connect(host='localhost', port=5432, dbname='bucket', user='admin', password='admin')
     cur = conn.cursor()
     print("Connection successful!")
+    cur.execute("CREATE TABLE IF NOT EXISTS files (id SERIAL PRIMARY KEY, name TEXT NOT NULL, key TEXT NOT NULL);")
+    conn.commit()
+
 except psycopg2.Error as e:
     print("Unable to connect to the database:", e)
 
 
-CREATE_TABLE = """CREATE TABLE IF NOT EXISTS files (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL, 
-    key TEXT NOT NULL
-);"""
-cur.execute(CREATE_TABLE)
-conn.commit()
 UPLOAD_PATH = os.getenv("UPLOAD_PATH")
 CREDENTIALS_PATH = os.getenv("CREDENTIALS_PATH")
 DESTINATION_FILE_PATH = os.getenv("DESTINATION_FILE_PATH")
